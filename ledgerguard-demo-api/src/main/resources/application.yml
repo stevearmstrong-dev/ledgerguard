@@ -1,0 +1,41 @@
+spring:
+  application:
+    name: ledgerguard-demo-api
+  kafka:
+    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
+    producer:
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.springframework.kafka.support.serializer.JsonSerializer
+      properties:
+        "[enable.idempotence]": true
+        "[acks]": all
+        "[spring.json.add.type.headers]": false
+    consumer:
+      group-id: ledgerguard-demo-api-v1
+      auto-offset-reset: earliest
+      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      value-deserializer: org.springframework.kafka.support.serializer.JsonDeserializer
+      properties:
+        "[spring.json.trusted.packages]": org.stevearmstrong.ledgerguard.contracts
+        "[spring.json.value.default.type]": org.stevearmstrong.ledgerguard.contracts.ReconciliationResult
+        "[spring.json.use.type.headers]": false
+
+server:
+  port: ${SERVER_PORT:8080}
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics,prometheus
+  endpoint:
+    health:
+      probes:
+        enabled: true
+
+ledgerguard:
+  topics:
+    payments: payments.v1
+    ledger-entries: ledger-entries.v1
+    reconciliations: reconciliations.v1
+    exceptions: reconciliation-exceptions.v1

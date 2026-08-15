@@ -1,0 +1,36 @@
+spring:
+  application:
+    name: ledgerguard-reconciliation
+  kafka:
+    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
+    streams:
+      application-id: ledgerguard-reconciliation-v1
+      replication-factor: 1
+      properties:
+        "[processing.guarantee]": exactly_once_v2
+        "[commit.interval.ms]": 250
+        "[state.dir]": ${KAFKA_STREAMS_STATE_DIR:/tmp/ledgerguard-streams}
+
+server:
+  port: ${SERVER_PORT:8081}
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics,prometheus
+  endpoint:
+    health:
+      probes:
+        enabled: true
+
+ledgerguard:
+  topics:
+    payments: payments.v1
+    ledger-entries: ledger-entries.v1
+    reconciliations: reconciliations.v1
+    exceptions: reconciliation-exceptions.v1
+  reconciliation:
+    join-window: 10s
+    grace-period: 3s
+    deduplication-retention: 24h

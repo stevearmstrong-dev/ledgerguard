@@ -1,0 +1,23 @@
+### API overview
+GET http://localhost:8080/api
+
+### Available scenarios
+GET http://localhost:8080/api/scenarios
+
+### Run a matching transaction
+POST http://localhost:8080/api/scenarios/matched
+
+### Run an amount mismatch
+POST http://localhost:8080/api/scenarios/amount-mismatch
+
+### Run a duplicate payment
+POST http://localhost:8080/api/scenarios/duplicate-payment
+
+### List recent reconciliation outcomes
+GET http://localhost:8080/api/reconciliations
+
+### Engine metrics
+GET http://localhost:8081/actuator/metrics/ledgerguard.reconciliations
+
+### Prometheus scrape endpoint
+GET http://localhost:8081/actuator/prometheus
