@@ -5,7 +5,7 @@ spring:
     bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
     producer:
       key-serializer: org.apache.kafka.common.serialization.StringSerializer
-      value-serializer: org.springframework.kafka.support.serializer.JsonSerializer
+      value-serializer: org.springframework.kafka.support.serializer.JacksonJsonSerializer
       properties:
         "[enable.idempotence]": true
         "[acks]": all
@@ -14,7 +14,7 @@ spring:
       group-id: ledgerguard-demo-api-v1
       auto-offset-reset: earliest
       key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
-      value-deserializer: org.springframework.kafka.support.serializer.JsonDeserializer
+      value-deserializer: org.springframework.kafka.support.serializer.JacksonJsonDeserializer
       properties:
         "[spring.json.trusted.packages]": org.stevearmstrong.ledgerguard.contracts
         "[spring.json.value.default.type]": org.stevearmstrong.ledgerguard.contracts.ReconciliationResult

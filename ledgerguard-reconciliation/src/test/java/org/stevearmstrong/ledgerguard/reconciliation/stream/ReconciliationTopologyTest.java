@@ -18,7 +18,7 @@ import org.apache.kafka.streams.TopologyTestDriver;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.springframework.kafka.support.serializer.JsonSerde;
+import org.springframework.kafka.support.serializer.JacksonJsonSerde;
 import org.stevearmstrong.ledgerguard.contracts.LedgerEntryEvent;
 import org.stevearmstrong.ledgerguard.contracts.PaymentEvent;
 import org.stevearmstrong.ledgerguard.contracts.ReconciliationResult;
@@ -61,9 +61,9 @@ class ReconciliationTopologyTest {
         properties.put(StreamsConfig.STATE_DIR_CONFIG, "target/kafka-streams-test");
         driver = new TopologyTestDriver(builder.build(), properties);
 
-        var paymentSerde = new JsonSerde<>(PaymentEvent.class);
-        var ledgerSerde = new JsonSerde<>(LedgerEntryEvent.class);
-        var resultSerde = new JsonSerde<>(ReconciliationResult.class);
+        var paymentSerde = new JacksonJsonSerde<>(PaymentEvent.class);
+        var ledgerSerde = new JacksonJsonSerde<>(LedgerEntryEvent.class);
+        var resultSerde = new JacksonJsonSerde<>(ReconciliationResult.class);
 
         payments = driver.createInputTopic(
                 TOPICS.payments(),

@@ -15,7 +15,7 @@ import org.springframework.boot.context.properties.EnableConfigurationProperties
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.kafka.annotation.EnableKafkaStreams;
-import org.springframework.kafka.support.serializer.JsonSerde;
+import org.springframework.kafka.support.serializer.JacksonJsonSerde;
 import org.stevearmstrong.ledgerguard.contracts.LedgerEntryEvent;
 import org.stevearmstrong.ledgerguard.contracts.PaymentEvent;
 import org.stevearmstrong.ledgerguard.contracts.ReconciliationResult;
@@ -39,9 +39,9 @@ public class ReconciliationTopology {
             ReconciliationService reconciliationService,
             ReconciliationMetrics metrics
     ) {
-        JsonSerde<PaymentEvent> paymentSerde = new JsonSerde<>(PaymentEvent.class);
-        JsonSerde<LedgerEntryEvent> ledgerSerde = new JsonSerde<>(LedgerEntryEvent.class);
-        JsonSerde<ReconciliationResult> resultSerde = new JsonSerde<>(ReconciliationResult.class);
+        JacksonJsonSerde<PaymentEvent> paymentSerde = new JacksonJsonSerde<>(PaymentEvent.class);
+        JacksonJsonSerde<LedgerEntryEvent> ledgerSerde = new JacksonJsonSerde<>(LedgerEntryEvent.class);
+        JacksonJsonSerde<ReconciliationResult> resultSerde = new JacksonJsonSerde<>(ReconciliationResult.class);
 
         addDeduplicationStore(builder, PAYMENT_EVENT_STORE, properties.deduplicationRetention());
         addDeduplicationStore(builder, LEDGER_EVENT_STORE, properties.deduplicationRetention());
