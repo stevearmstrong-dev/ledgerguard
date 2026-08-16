@@ -36,7 +36,7 @@
         <p class="eyebrow"><span>LIVE DEMO</span> JAVA 21 · SPRING BOOT · KAFKA STREAMS</p>
         <h1 id="page-title">Reconcile the<br><em>event stream.</em></h1>
         <p class="hero-summary">
-          Publish synthetic payment and ledger events, watch them move through Kafka, and inspect the auditable result produced by the stateful reconciliation engine.
+          Build a payment and ledger transaction, publish it to Kafka, and inspect every acknowledged event, stream-processing decision, and auditable outcome.
         </p>
       </div>
 
@@ -55,10 +55,115 @@
       <section class="scenario-panel" aria-labelledby="scenario-title">
         <div class="panel-heading">
           <div>
-            <p class="section-index">01 / PRODUCE EVENTS</p>
-            <h2 id="scenario-title">Choose a failure mode.</h2>
+            <p class="section-index">01 / BUILD EVENTS</p>
+            <h2 id="scenario-title">Create a transaction.</h2>
           </div>
-          <p>Each control publishes a real event pattern to the local Kafka broker.</p>
+          <p>Control both sides of the transaction. Every submission is validated by Spring Boot and published as real Kafka records.</p>
+        </div>
+
+        <form class="transaction-workbench" id="transaction-form">
+          <div class="workbench-header">
+            <div>
+              <span class="workbench-kicker">CUSTOM INPUT</span>
+              <h3>Transaction workbench</h3>
+              <p>Remove either event to test a missing-side window, or change the values to trigger a mismatch.</p>
+            </div>
+            <label class="transaction-id-field">
+              <span>Transaction ID</span>
+              <span class="input-action-row">
+                <input id="transaction-id-input" name="transactionId" maxlength="40" pattern="[A-Za-z0-9._-]+" autocomplete="off" required>
+                <button id="regenerate-transaction" type="button">New ID</button>
+              </span>
+            </label>
+          </div>
+
+          <div class="event-editor-grid">
+            <fieldset class="event-editor" id="payment-editor">
+              <legend><span>01A</span> PaymentEvent</legend>
+              <label class="event-toggle">
+                <input id="publish-payment" type="checkbox" checked>
+                <span>Publish payment</span>
+              </label>
+              <div class="field-row">
+                <label>
+                  <span>Amount</span>
+                  <input id="payment-input-amount" type="number" min="0.01" max="999999999999.99" step="0.01" value="125.50" required>
+                </label>
+                <label>
+                  <span>Currency</span>
+                  <select id="payment-input-currency">
+                    <option selected>CAD</option>
+                    <option>USD</option>
+                    <option>EUR</option>
+                    <option>GBP</option>
+                    <option>INR</option>
+                  </select>
+                </label>
+              </div>
+              <p class="event-topic">TOPIC · payments.v1</p>
+            </fieldset>
+
+            <fieldset class="event-editor" id="ledger-editor">
+              <legend><span>01B</span> LedgerEntryEvent</legend>
+              <label class="event-toggle">
+                <input id="publish-ledger" type="checkbox" checked>
+                <span>Publish ledger entry</span>
+              </label>
+              <div class="field-row">
+                <label>
+                  <span>Amount</span>
+                  <input id="ledger-input-amount" type="number" min="0.01" max="999999999999.99" step="0.01" value="125.50" required>
+                </label>
+                <label>
+                  <span>Currency</span>
+                  <select id="ledger-input-currency">
+                    <option selected>CAD</option>
+                    <option>USD</option>
+                    <option>EUR</option>
+                    <option>GBP</option>
+                    <option>INR</option>
+                  </select>
+                </label>
+              </div>
+              <p class="event-topic">TOPIC · ledger-entries.v1</p>
+            </fieldset>
+          </div>
+
+          <div class="delivery-controls">
+            <label>
+              <span>Event order</span>
+              <select id="event-order-input">
+                <option value="PAYMENT_FIRST">Payment first</option>
+                <option value="LEDGER_FIRST">Ledger first</option>
+              </select>
+            </label>
+            <label>
+              <span>Delay between sides</span>
+              <select id="event-delay-input">
+                <option value="0">No delay</option>
+                <option value="250">250 ms</option>
+                <option value="500" selected>500 ms</option>
+                <option value="1000">1 second</option>
+                <option value="2000">2 seconds</option>
+                <option value="3000">3 seconds</option>
+              </select>
+            </label>
+            <label class="duplicate-control">
+              <input id="duplicate-payment-input" type="checkbox">
+              <span><strong>Duplicate payment</strong><small>Reuse the same event ID</small></span>
+            </label>
+            <button class="run-transaction" id="run-transaction" type="submit">
+              <span>Run through Kafka</span><span aria-hidden="true">→</span>
+            </button>
+          </div>
+        </form>
+
+        <div class="preset-heading">
+          <div>
+            <p class="section-index">QUICK PRESETS</p>
+            <h3>Or run a known case.</h3>
+          </div>
+          <p>These shortcuts populate and publish repeatable event patterns.</p>
         </div>
         <div class="scenario-grid" id="scenario-grid" aria-live="polite">
           <p class="loading-copy">Loading scenarios…</p>
@@ -111,6 +216,48 @@
           <span>WAITING</span>
           <p>The topology is ready for a scenario.</p>
         </div>
+
+        <section class="trace-console" aria-labelledby="trace-title">
+          <div class="trace-header">
+            <div>
+              <p class="section-index">LIVE PROCESSING TRACE</p>
+              <h3 id="trace-title">What the system is doing.</h3>
+            </div>
+            <span id="trace-status">READY</span>
+          </div>
+          <ol class="processing-trace" id="processing-trace">
+            <li class="trace-step" data-trace="validate">
+              <span class="trace-index">01</span>
+              <div><strong>Validate request</strong><p>Spring validates amounts, currencies, ordering, and event presence.</p><pre hidden></pre></div>
+              <span class="trace-state">WAITING</span>
+            </li>
+            <li class="trace-step" data-trace="serialize">
+              <span class="trace-index">02</span>
+              <div><strong>Construct event records</strong><p>Immutable Java records receive event IDs, references, and event timestamps.</p><pre hidden></pre></div>
+              <span class="trace-state">WAITING</span>
+            </li>
+            <li class="trace-step" data-trace="broker">
+              <span class="trace-index">03</span>
+              <div><strong>Broker acknowledgement</strong><p>Idempotent producers write JSON records, keyed by transaction ID.</p><pre hidden></pre></div>
+              <span class="trace-state">WAITING</span>
+            </li>
+            <li class="trace-step" data-trace="stream">
+              <span class="trace-index">04</span>
+              <div><strong>Stateful stream processing</strong><p>Kafka Streams deduplicates event IDs and joins both sides in event time.</p><pre hidden></pre></div>
+              <span class="trace-state">WAITING</span>
+            </li>
+            <li class="trace-step" data-trace="classify">
+              <span class="trace-index">05</span>
+              <div><strong>Classify outcome</strong><p>Domain rules compare event presence, amount, and currency.</p><pre hidden></pre></div>
+              <span class="trace-state">WAITING</span>
+            </li>
+            <li class="trace-step" data-trace="project">
+              <span class="trace-index">06</span>
+              <div><strong>Route and project</strong><p>The result reaches the audit topic, exception topic when needed, and this query view.</p><pre hidden></pre></div>
+              <span class="trace-state">WAITING</span>
+            </li>
+          </ol>
+        </section>
       </section>
 
       <section class="outcome-panel" aria-labelledby="outcome-title">

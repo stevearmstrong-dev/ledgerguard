@@ -6,10 +6,13 @@ import java.util.Locale;
 import java.util.Map;
 
 import org.springframework.http.HttpStatus;
+import org.springframework.http.ProblemDetail;
 import org.springframework.web.bind.annotation.DeleteMapping;
+import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.ResponseStatus;
@@ -18,8 +21,11 @@ import org.springframework.web.server.ResponseStatusException;
 import org.stevearmstrong.ledgerguard.contracts.ReconciliationResult;
 import org.stevearmstrong.ledgerguard.demo.result.ReconciliationResultStore;
 import org.stevearmstrong.ledgerguard.demo.scenario.ScenarioPublisher;
-import org.stevearmstrong.ledgerguard.demo.scenario.ScenarioResponse;
 import org.stevearmstrong.ledgerguard.demo.scenario.ScenarioType;
+import org.stevearmstrong.ledgerguard.demo.scenario.SubmissionResponse;
+import org.stevearmstrong.ledgerguard.demo.scenario.TransactionRequest;
+
+import jakarta.validation.Valid;
 
 @RestController
 @RequestMapping("/api")
@@ -42,6 +48,7 @@ public class LedgerGuardController {
                 "service", "LedgerGuard Demo API",
                 "description", "Real-time financial transaction reconciliation with Java and Kafka",
                 "scenarioEndpoint", "POST /api/scenarios/{scenario}",
+                "transactionEndpoint", "POST /api/transactions",
                 "resultsEndpoint", "GET /api/reconciliations"
         );
     }
@@ -54,8 +61,13 @@ public class LedgerGuardController {
     }
 
     @PostMapping("/scenarios/{scenario}")
-    ScenarioResponse runScenario(@PathVariable String scenario) {
+    SubmissionResponse runScenario(@PathVariable String scenario) {
         return scenarioPublisher.publish(parseScenario(scenario));
+    }
+
+    @PostMapping("/transactions")
+    SubmissionResponse publishTransaction(@Valid @RequestBody TransactionRequest request) {
+        return scenarioPublisher.publish(request);
     }
 
     @GetMapping("/reconciliations")
@@ -69,6 +81,11 @@ public class LedgerGuardController {
     @ResponseStatus(HttpStatus.NO_CONTENT)
     void clearReconciliations() {
         resultStore.clear();
+    }
+
+    @ExceptionHandler(IllegalArgumentException.class)
+    ProblemDetail invalidTransaction(IllegalArgumentException exception) {
+        return ProblemDetail.forStatusAndDetail(HttpStatus.BAD_REQUEST, exception.getMessage());
     }
 
     private ScenarioType parseScenario(String scenario) {

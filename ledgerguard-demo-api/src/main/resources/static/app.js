@@ -36,6 +36,15 @@ const scenarioCopy = {
   },
 };
 
+const traceDefaults = {
+  validate: "Spring validates amounts, currencies, ordering, and event presence.",
+  serialize: "Immutable Java records receive event IDs, references, and event timestamps.",
+  broker: "Idempotent producers write JSON records, keyed by transaction ID.",
+  stream: "Kafka Streams deduplicates event IDs and joins both sides in event time.",
+  classify: "Domain rules compare event presence, amount, and currency.",
+  project: "The result reaches the audit topic, exception topic when needed, and this query view.",
+};
+
 const state = {
   results: [],
   filter: "all",
@@ -47,11 +56,28 @@ const state = {
 const elements = {
   apiStatus: document.querySelector("#api-status"),
   scenarioGrid: document.querySelector("#scenario-grid"),
+  transactionForm: document.querySelector("#transaction-form"),
+  transactionIdInput: document.querySelector("#transaction-id-input"),
+  regenerateTransaction: document.querySelector("#regenerate-transaction"),
+  publishPayment: document.querySelector("#publish-payment"),
+  publishLedger: document.querySelector("#publish-ledger"),
+  paymentEditor: document.querySelector("#payment-editor"),
+  ledgerEditor: document.querySelector("#ledger-editor"),
+  paymentInputAmount: document.querySelector("#payment-input-amount"),
+  paymentInputCurrency: document.querySelector("#payment-input-currency"),
+  ledgerInputAmount: document.querySelector("#ledger-input-amount"),
+  ledgerInputCurrency: document.querySelector("#ledger-input-currency"),
+  eventOrderInput: document.querySelector("#event-order-input"),
+  eventDelayInput: document.querySelector("#event-delay-input"),
+  duplicatePaymentInput: document.querySelector("#duplicate-payment-input"),
+  runTransaction: document.querySelector("#run-transaction"),
   currentTransaction: document.querySelector("#current-transaction"),
   currentRunState: document.querySelector("#current-run-state"),
   eventClock: document.querySelector("#event-clock"),
   pipeline: document.querySelector("#event-pipeline"),
   eventLedger: document.querySelector("#event-ledger"),
+  traceStatus: document.querySelector("#trace-status"),
+  processingTrace: document.querySelector("#processing-trace"),
   outcomeBadge: document.querySelector("#outcome-badge"),
   outcomeEmpty: document.querySelector("#outcome-empty"),
   outcomeDetail: document.querySelector("#outcome-detail"),
@@ -95,6 +121,9 @@ async function request(url, options = {}) {
 async function initialize() {
   updateClock();
   window.setInterval(updateClock, 1000);
+  generateTransactionId();
+  syncEventEditors();
+  resetTrace();
 
   try {
     await request("/api");
@@ -138,40 +167,147 @@ function renderScenarios(scenarios) {
 }
 
 async function runScenario(scenario) {
+  await executeRun({
+    runKey: scenario,
+    label: scenarioCopy[scenario].title,
+    requestSummary: { preset: scenario },
+    submit: () => request(`/api/scenarios/${scenario.toLowerCase().replaceAll("_", "-")}`, {
+      method: "POST",
+    }),
+  });
+}
+
+async function runCustomTransaction(event) {
+  event.preventDefault();
+  if (state.running || !elements.transactionForm.reportValidity()) return;
+  if (!elements.publishPayment.checked && !elements.publishLedger.checked) {
+    showToast("Publish at least one payment or ledger event.", true);
+    return;
+  }
+
+  const transaction = {
+    transactionId: elements.transactionIdInput.value,
+    paymentAmount: elements.publishPayment.checked ? Number(elements.paymentInputAmount.value) : null,
+    paymentCurrency: elements.publishPayment.checked ? elements.paymentInputCurrency.value : null,
+    ledgerAmount: elements.publishLedger.checked ? Number(elements.ledgerInputAmount.value) : null,
+    ledgerCurrency: elements.publishLedger.checked ? elements.ledgerInputCurrency.value : null,
+    eventOrder: elements.eventOrderInput.value,
+    eventDelayMs: Number(elements.eventDelayInput.value),
+    duplicatePayment: elements.publishPayment.checked && elements.duplicatePaymentInput.checked,
+  };
+
+  await executeRun({
+    runKey: "CUSTOM",
+    label: "Custom transaction",
+    requestSummary: transaction,
+    submit: () => request("/api/transactions", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(transaction),
+    }),
+  });
+}
+
+async function executeRun({ runKey, label, requestSummary, submit }) {
   if (state.running) return;
-  state.running = scenario;
-  setScenarioButtonsDisabled(true, scenario);
+  state.running = runKey;
+  setControlsDisabled(true, runKey);
   resetPipeline();
-  setPipelineStage("produce", "Publishing synthetic events to the payment and ledger topics.");
+  resetTrace();
+  setTraceStep("validate", "active", "Request received. Applying bean validation and cross-field event rules.", requestSummary);
+  elements.traceStatus.textContent = "PROCESSING";
+  setPipelineStage("produce", "The demo API is validating the transaction and constructing event records.");
   elements.currentTransaction.textContent = "Submitting…";
-  elements.currentRunState.textContent = scenarioCopy[scenario].title;
+  elements.currentRunState.textContent = label;
 
   try {
-    await delay(260);
-    const submission = await request(`/api/scenarios/${scenario.toLowerCase().replaceAll("_", "-")}`, {
-      method: "POST",
-    });
+    const submission = await submit();
+    const eventCount = submission.publishedEvents.length;
+    const missingSide = isMissingSideSubmission(submission);
 
     elements.currentTransaction.textContent = submission.transactionId;
-    elements.currentRunState.textContent = `${submission.publishedEvents.length} event${submission.publishedEvents.length === 1 ? "" : "s"} acknowledged by Kafka.`;
-    setPipelineStage("broker", `${submission.publishedEvents.length} event${submission.publishedEvents.length === 1 ? "" : "s"} acknowledged by the broker.`);
-    await delay(420);
-    setPipelineStage("reconcile", "Kafka Streams is evaluating event time, deduplication state, and the outer join window.");
+    elements.currentRunState.textContent = `${eventCount} event${eventCount === 1 ? "" : "s"} acknowledged by Kafka.`;
 
-    const missingSideScenario = scenario.startsWith("MISSING_");
-    const results = await waitForResult(submission.transactionId, missingSideScenario ? 5500 : 8500);
+    setTraceStep(
+      "validate",
+      "complete",
+      `${submission.runType} request accepted as ${submission.transactionId}.`,
+      { transactionId: submission.transactionId, eventOrder: submission.eventOrder, delayMs: submission.eventDelayMs },
+    );
+    await delay(180);
+    setTraceStep(
+      "serialize",
+      "complete",
+      `${eventCount} immutable event record${eventCount === 1 ? " was" : "s were"} assigned IDs, references, and event timestamps.`,
+      submission.publishedEvents.map(eventPayload),
+    );
+    await delay(220);
+    setPipelineStage("broker", `${eventCount} event${eventCount === 1 ? "" : "s"} acknowledged by the broker.`);
+    setTraceStep(
+      "broker",
+      "complete",
+      `Kafka acknowledged ${eventCount} idempotent write${eventCount === 1 ? "" : "s"}, partitioned by ${submission.transactionId}.`,
+      submission.publishedEvents.map((publishedEvent) => ({
+        sequence: publishedEvent.sequence,
+        topic: publishedEvent.topic,
+        key: publishedEvent.transactionId,
+        eventId: publishedEvent.eventId,
+        duplicate: publishedEvent.duplicate,
+      })),
+    );
+    await delay(260);
+    setPipelineStage("reconcile", "Kafka Streams is evaluating event time, deduplication state, and the outer join window.");
+    setTraceStep(
+      "stream",
+      "active",
+      `Consuming by transaction key. The outer join uses a 10-second event-time window and 3-second grace period.`,
+      {
+        key: submission.transactionId,
+        eventOrder: submission.eventOrder,
+        eventDelayMs: submission.eventDelayMs,
+        exactlyOnce: "exactly_once_v2",
+        deduplicationRetention: "24h",
+      },
+    );
+
+    const results = await waitForResult(submission.transactionId, missingSide ? 5500 : 8500);
 
     if (results.length > 0) {
       const focusResult = results.find((result) => result.status !== "MATCHED") || results[0];
       const needsReview = focusResult.status !== "MATCHED";
+      setTraceStep(
+        "stream",
+        "complete",
+        `Stream state produced ${results.length} reconciliation record${results.length === 1 ? "" : "s"}.`,
+        { resultsProduced: results.length, transactionId: submission.transactionId },
+      );
+      await delay(220);
+      setTraceStep(
+        "classify",
+        needsReview ? "review" : "complete",
+        `${focusResult.status.replaceAll("_", " ")}: ${focusResult.reason}`,
+        reconciliationPayload(focusResult),
+      );
+      await delay(220);
+      setTraceStep(
+        "project",
+        needsReview ? "review" : "complete",
+        `Written to reconciliations.v1${needsReview ? " and reconciliation-exceptions.v1" : ""}, then consumed by the query projection.`,
+        {
+          auditTopic: "reconciliations.v1",
+          exceptionTopic: needsReview ? "reconciliation-exceptions.v1" : null,
+          apiResource: `/api/reconciliations?transactionId=${submission.transactionId}`,
+        },
+      );
       setPipelineStage(
         "outcome",
         `${focusResult.status.replaceAll("_", " ")} written to the audit${needsReview ? " and exception" : ""} topic.`,
         needsReview,
       );
+      elements.traceStatus.textContent = needsReview ? "REVIEW" : "COMPLETE";
       renderOutcome(focusResult);
       showToast(`${submission.transactionId} produced ${results.length} reconciliation outcome${results.length === 1 ? "" : "s"}.`);
-    } else if (missingSideScenario) {
+    } else if (missingSide) {
       showPendingWindow(submission.transactionId);
     } else {
       throw new Error("No reconciliation result arrived before the demo timeout.");
@@ -180,11 +316,13 @@ async function runScenario(scenario) {
     await refreshResults();
   } catch (error) {
     resetPipeline();
-    elements.currentRunState.textContent = "Scenario failed before reconciliation.";
+    markActiveTraceFailed(error.message);
+    elements.currentRunState.textContent = "Submission failed before reconciliation.";
+    elements.traceStatus.textContent = "FAILED";
     showToast(error.message, true);
   } finally {
     state.running = null;
-    setScenarioButtonsDisabled(false);
+    setControlsDisabled(false);
   }
 }
 
@@ -198,13 +336,52 @@ async function waitForResult(transactionId, timeoutMs) {
   return [];
 }
 
+function isMissingSideSubmission(submission) {
+  const types = new Set(submission.publishedEvents.map((publishedEvent) => publishedEvent.eventType));
+  return !types.has("PAYMENT") || !types.has("LEDGER_ENTRY");
+}
+
+function eventPayload(publishedEvent) {
+  return {
+    sequence: publishedEvent.sequence,
+    eventType: publishedEvent.eventType,
+    eventId: publishedEvent.eventId,
+    transactionId: publishedEvent.transactionId,
+    amount: publishedEvent.amount,
+    currency: publishedEvent.currency,
+    reference: publishedEvent.reference,
+    occurredAt: publishedEvent.occurredAt,
+    duplicate: publishedEvent.duplicate,
+  };
+}
+
+function reconciliationPayload(result) {
+  return {
+    reconciliationId: result.reconciliationId,
+    transactionId: result.transactionId,
+    paymentEventId: result.paymentEventId,
+    ledgerEventId: result.ledgerEventId,
+    payment: result.paymentAmount == null ? null : `${result.paymentAmount} ${result.paymentCurrency}`,
+    ledger: result.ledgerAmount == null ? null : `${result.ledgerAmount} ${result.ledgerCurrency}`,
+    status: result.status,
+    evaluatedAt: result.evaluatedAt,
+  };
+}
+
 function showPendingWindow(transactionId) {
   elements.currentRunState.textContent = "Waiting for stream time to advance beyond the join window.";
   elements.eventLedger.className = "event-ledger is-active";
   elements.eventLedger.innerHTML = `
     <span>WINDOW OPEN</span>
-    <p>${escapeHtml(transactionId)} is intentionally unmatched. Run another scenario after the 10s window to advance event time and emit the missing-side outcome.</p>
+    <p>${escapeHtml(transactionId)} is intentionally unmatched. Run another transaction after the 10s window to advance event time and emit the missing-side outcome.</p>
   `;
+  setTraceStep(
+    "stream",
+    "active",
+    "One side is stored in the outer-join window. Kafka Streams uses event time, so another event must advance stream time past the window.",
+    { transactionId, joinWindow: "10s", gracePeriod: "3s", state: "WAITING_FOR_COUNTERPART" },
+  );
+  elements.traceStatus.textContent = "WINDOW OPEN";
   showToast("The unmatched event is held by the event-time window—this is expected Kafka Streams behavior.");
 }
 
@@ -222,7 +399,40 @@ function setPipelineStage(stage, message, review = false) {
 function resetPipeline() {
   elements.pipeline.querySelectorAll("[data-stage]").forEach((node) => node.classList.remove("is-active", "is-review"));
   elements.eventLedger.className = "event-ledger";
-  elements.eventLedger.innerHTML = "<span>WAITING</span><p>The topology is ready for a scenario.</p>";
+  elements.eventLedger.innerHTML = "<span>WAITING</span><p>The topology is ready for a transaction.</p>";
+}
+
+function resetTrace() {
+  elements.processingTrace.querySelectorAll("[data-trace]").forEach((step) => {
+    const key = step.dataset.trace;
+    step.className = "trace-step";
+    step.querySelector("p").textContent = traceDefaults[key];
+    step.querySelector(".trace-state").textContent = "WAITING";
+    const payload = step.querySelector("pre");
+    payload.hidden = true;
+    payload.textContent = "";
+  });
+  elements.traceStatus.textContent = "READY";
+}
+
+function setTraceStep(key, status, detail, payload) {
+  const step = elements.processingTrace.querySelector(`[data-trace="${key}"]`);
+  step.className = `trace-step is-${status}`;
+  step.querySelector("p").textContent = detail;
+  step.querySelector(".trace-state").textContent = status === "review" ? "REVIEW" : status.toUpperCase();
+  const payloadElement = step.querySelector("pre");
+  if (payload !== undefined) {
+    payloadElement.hidden = false;
+    payloadElement.textContent = JSON.stringify(payload, null, 2);
+  }
+}
+
+function markActiveTraceFailed(message) {
+  const active = elements.processingTrace.querySelector(".is-active")
+    || elements.processingTrace.querySelector("[data-trace='validate']");
+  active.className = "trace-step is-review";
+  active.querySelector("p").textContent = message;
+  active.querySelector(".trace-state").textContent = "FAILED";
 }
 
 async function refreshResults() {
@@ -287,11 +497,33 @@ function renderTable() {
   }).join("");
 }
 
-function setScenarioButtonsDisabled(disabled, activeScenario) {
+function setControlsDisabled(disabled, activeRun) {
   elements.scenarioGrid.querySelectorAll("[data-scenario]").forEach((button) => {
     button.disabled = disabled;
-    button.classList.toggle("is-running", button.dataset.scenario === activeScenario);
+    button.classList.toggle("is-running", button.dataset.scenario === activeRun);
   });
+  elements.transactionForm.querySelectorAll("button, input, select").forEach((control) => {
+    control.disabled = disabled;
+  });
+  if (!disabled) syncEventEditors();
+}
+
+function syncEventEditors() {
+  const paymentEnabled = elements.publishPayment.checked;
+  const ledgerEnabled = elements.publishLedger.checked;
+  elements.paymentEditor.classList.toggle("is-disabled", !paymentEnabled);
+  elements.ledgerEditor.classList.toggle("is-disabled", !ledgerEnabled);
+  elements.paymentInputAmount.disabled = !paymentEnabled;
+  elements.paymentInputCurrency.disabled = !paymentEnabled;
+  elements.ledgerInputAmount.disabled = !ledgerEnabled;
+  elements.ledgerInputCurrency.disabled = !ledgerEnabled;
+  elements.duplicatePaymentInput.disabled = !paymentEnabled;
+  if (!paymentEnabled) elements.duplicatePaymentInput.checked = false;
+}
+
+function generateTransactionId() {
+  const randomPart = crypto.getRandomValues(new Uint32Array(1))[0].toString(16).slice(0, 6).toUpperCase();
+  elements.transactionIdInput.value = `DEMO-${randomPart}`;
 }
 
 function setApiStatus(status, label) {
@@ -353,6 +585,11 @@ function escapeHtml(value) {
     .replaceAll('"', "&quot;")
     .replaceAll("'", "&#039;");
 }
+
+elements.transactionForm.addEventListener("submit", runCustomTransaction);
+elements.regenerateTransaction.addEventListener("click", generateTransactionId);
+elements.publishPayment.addEventListener("change", syncEventEditors);
+elements.publishLedger.addEventListener("change", syncEventEditors);
 
 elements.resultFilter.addEventListener("change", (event) => {
   state.filter = event.target.value;

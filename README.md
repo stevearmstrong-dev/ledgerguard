@@ -17,6 +17,8 @@ The project uses synthetic data and rules. It contains no employer code, proprie
 - Explicit exception routing
 - Idempotent Kafka production
 - Same-origin operations dashboard backed by the live event stream
+- User-defined payment and ledger events with an inspectable processing trace
+- Public-demo input validation, concurrency protection, and rate limiting
 - Metrics with Spring Boot Actuator, Micrometer, and Prometheus
 - Topology, domain, simulator, dashboard, and real-broker tests
 
@@ -42,7 +44,7 @@ The system is intentionally split into three focused modules:
 | --- | --- |
 | `ledgerguard-contracts` | Immutable payment, ledger, and reconciliation event contracts |
 | `ledgerguard-reconciliation` | Deduplication, event-time joins, classification, routing, and metrics |
-| `ledgerguard-demo-api` | Interactive dashboard, scenario generation, and a queryable projection of recent outcomes |
+| `ledgerguard-demo-api` | Interactive transaction workbench, scenario generation, processing trace, and a queryable projection of recent outcomes |
 
 ## Reconciliation outcomes
 
@@ -82,13 +84,30 @@ In another terminal, start the demo API:
 java -jar ledgerguard-demo-api/target/ledgerguard-demo-api-0.1.0-SNAPSHOT.jar
 ```
 
-Open [http://localhost:8080](http://localhost:8080) to use the interactive reconciliation console. It runs every scenario against the local Kafka broker, visualizes the processing stages, and updates the result history from the live projection.
+Open [http://localhost:8080](http://localhost:8080) to use the interactive reconciliation console. You can enter payment and ledger values, remove either side, change event order and delay, duplicate a payment, and then inspect the real records and decisions at every processing stage. Seven repeatable scenarios are also included.
 
 The REST API remains available for command-line use:
 
 ```bash
 curl -X POST http://localhost:8080/api/scenarios/amount-mismatch
 curl http://localhost:8080/api/reconciliations
+```
+
+Submit your own event pair:
+
+```bash
+curl -X POST http://localhost:8080/api/transactions \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "transactionId": "RECRUITER-DEMO-01",
+    "paymentAmount": 275.00,
+    "paymentCurrency": "CAD",
+    "ledgerAmount": 271.50,
+    "ledgerCurrency": "CAD",
+    "eventOrder": "LEDGER_FIRST",
+    "eventDelayMs": 500,
+    "duplicatePayment": false
+  }'
 ```
 
 Available scenarios:
@@ -116,6 +135,12 @@ curl http://localhost:8081/actuator/prometheus
 LedgerGuard uses event timestamps rather than wall-clock processing time. Payments and ledger entries are joined within a 10-second window with a 3-second grace period. This lets records reconcile even when they arrive in the opposite order.
 
 Duplicate IDs are retained in persistent window stores for 24 hours. This bounds state growth while covering a realistic upstream retry horizon. Both decisions are documented in [`docs/adr`](docs/adr).
+
+## Container deployment
+
+The repository includes separate production Dockerfiles for the demo API and reconciliation engine, plus [`compose.deploy.yml`](compose.deploy.yml) for the complete three-service stack. Only the demo API should receive a public HTTP domain; Kafka and the stream engine communicate over the host's private network.
+
+For Railway, point the two Java services at their matching `railway.*.json` files and set `KAFKA_BOOTSTRAP_SERVERS` to the Kafka service's private address. Both applications honor the platform-provided `PORT` value and expose readiness health checks.
 
 ## Test strategy
 

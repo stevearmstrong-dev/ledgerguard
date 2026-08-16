@@ -3,10 +3,12 @@ package org.stevearmstrong.ledgerguard.demo.scenario;
 import java.time.Instant;
 import java.util.List;
 
-public record ScenarioResponse(
+public record SubmissionResponse(
         String transactionId,
-        ScenarioType scenario,
+        String runType,
         Instant submittedAt,
-        List<String> publishedEvents
+        EventOrder eventOrder,
+        long eventDelayMs,
+        List<PublishedEvent> publishedEvents
 ) {
 }

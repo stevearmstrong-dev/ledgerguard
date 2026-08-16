@@ -17,14 +17,18 @@ class DashboardAssetsTest {
 
         assertThat(html)
                 .contains("LedgerGuard · Reconciliation Console")
+                .contains("Transaction workbench")
                 .contains("Follow the transaction")
+                .contains("LIVE PROCESSING TRACE")
                 .contains("Recent reconciliations")
                 .contains("/app.js")
                 .contains("/styles.css");
         assertThat(javascript)
                 .contains("/api/scenarios/")
+                .contains("/api/transactions")
                 .contains("/api/reconciliations")
                 .contains("waitForResult")
+                .contains("setTraceStep")
                 .contains("MISSING_LEDGER_ENTRY")
                 .contains("visibilitychange");
     }
