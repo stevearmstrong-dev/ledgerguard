@@ -14,6 +14,7 @@ class DashboardAssetsTest {
     void dashboardExposesTheRealScenarioAndResultEndpoints() throws IOException {
         String html = resource("static/index.html");
         String javascript = resource("static/app.js");
+        String applicationConfiguration = resource("application.yml");
 
         assertThat(html)
                 .contains("LedgerGuard · Reconciliation Console")
@@ -23,8 +24,8 @@ class DashboardAssetsTest {
                 .contains("Recent transaction activity")
                 .contains("Transactions")
                 .contains("Flagged")
-                .contains("/app.js")
-                .contains("/styles.css");
+                .contains("/app.js?v=2")
+                .contains("/styles.css?v=2");
         assertThat(javascript)
                 .contains("/api/scenarios/")
                 .contains("/api/transactions")
@@ -35,6 +36,7 @@ class DashboardAssetsTest {
                 .contains("Duplicate payment ignored")
                 .contains("MISSING_LEDGER_ENTRY")
                 .contains("visibilitychange");
+        assertThat(applicationConfiguration).contains("no-cache: true");
     }
 
     private String resource(String path) throws IOException {
