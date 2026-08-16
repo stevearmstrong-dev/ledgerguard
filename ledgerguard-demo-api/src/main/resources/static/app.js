@@ -45,6 +45,8 @@ const traceDefaults = {
   project: "The result reaches the audit topic, exception topic when needed, and this query view.",
 };
 
+const duplicateStatuses = new Set(["DUPLICATE_PAYMENT", "DUPLICATE_LEDGER_ENTRY"]);
+
 const state = {
   results: [],
   filter: "all",
@@ -306,7 +308,13 @@ async function executeRun({ runKey, label, requestSummary, submit }) {
       );
       elements.traceStatus.textContent = needsReview ? "REVIEW" : "COMPLETE";
       renderOutcome(focusResult);
-      showToast(`${submission.transactionId} produced ${results.length} reconciliation outcome${results.length === 1 ? "" : "s"}.`);
+      const duplicateCount = results.filter(isDuplicateResult).length;
+      const outcomeCount = results.length - duplicateCount;
+      const outcomeSummary = `${outcomeCount} reconciliation outcome${outcomeCount === 1 ? "" : "s"}`;
+      const duplicateSummary = duplicateCount
+        ? ` and ${duplicateCount} duplicate audit event${duplicateCount === 1 ? "" : "s"}`
+        : "";
+      showToast(`${submission.transactionId} produced ${outcomeSummary}${duplicateSummary}.`);
     } else if (missingSide) {
       showPendingWindow(submission.transactionId);
     } else {
@@ -461,19 +469,20 @@ function renderOutcome(result) {
 }
 
 function renderMetrics() {
-  const total = state.results.length;
-  const matched = state.results.filter((result) => result.status === "MATCHED").length;
-  const review = total - matched;
+  const transactions = groupResultsByTransaction(state.results);
+  const total = transactions.length;
+  const matched = transactions.filter((transaction) => transaction.primary.status === "MATCHED").length;
+  const flagged = transactions.filter((transaction) => transaction.hasReview).length;
   elements.metricTotal.textContent = String(total);
   elements.metricMatched.textContent = String(matched);
-  elements.metricReview.textContent = String(review);
+  elements.metricReview.textContent = String(flagged);
   elements.metricRate.textContent = total ? `${Math.round((matched / total) * 100)}%` : "—";
 }
 
 function renderTable() {
-  const filtered = state.results.filter((result) => {
-    if (state.filter === "matched") return result.status === "MATCHED";
-    if (state.filter === "review") return result.status !== "MATCHED";
+  const filtered = groupResultsByTransaction(state.results).filter((transaction) => {
+    if (state.filter === "matched") return transaction.primary.status === "MATCHED";
+    if (state.filter === "review") return transaction.hasReview;
     return true;
   });
 
@@ -482,19 +491,82 @@ function renderTable() {
     return;
   }
 
-  elements.resultTable.innerHTML = filtered.map((result) => {
+  elements.resultTable.innerHTML = filtered.map((transaction) => {
+    const result = transaction.primary;
     const matched = result.status === "MATCHED";
+    const auditCount = transaction.auditEvents.length;
+    const auditOutcomes = transaction.auditEvents.map((auditEvent) => `
+      <span class="table-status is-audit">${escapeHtml(auditLabel(auditEvent))}</span>
+    `).join("");
+    const auditReasons = transaction.auditEvents.map((auditEvent) => `
+      <div class="table-audit-note">
+        <strong>${escapeHtml(auditLabel(auditEvent))}</strong>
+        <span>${escapeHtml(auditEvent.reason)}</span>
+      </div>
+    `).join("");
+
     return `
       <tr>
-        <td>${escapeHtml(formatTime(result.evaluatedAt))}</td>
-        <td>${escapeHtml(result.transactionId)}</td>
-        <td><span class="table-status ${matched ? "is-matched" : "is-review"}">${escapeHtml(result.status.replaceAll("_", " "))}</span></td>
+        <td>${escapeHtml(formatTime(transaction.latestEvaluatedAt))}</td>
+        <td>
+          <span class="table-transaction-id">${escapeHtml(transaction.transactionId)}</span>
+          ${auditCount ? `<span class="table-audit-count">${auditCount} audit event${auditCount === 1 ? "" : "s"}</span>` : ""}
+        </td>
+        <td>
+          <div class="table-outcomes">
+            <span class="table-status ${matched ? "is-matched" : "is-review"}">${escapeHtml(result.status.replaceAll("_", " "))}</span>
+            ${auditOutcomes}
+          </div>
+        </td>
         <td>${escapeHtml(formatAmount(result.paymentAmount, result.paymentCurrency))}</td>
         <td>${escapeHtml(formatAmount(result.ledgerAmount, result.ledgerCurrency))}</td>
-        <td class="table-reason">${escapeHtml(result.reason)}</td>
+        <td class="table-reason">
+          <span>${escapeHtml(result.reason)}</span>
+          ${auditReasons}
+        </td>
       </tr>
     `;
   }).join("");
+}
+
+function groupResultsByTransaction(results) {
+  const groups = new Map();
+
+  results.forEach((result) => {
+    const transactionId = result.transactionId || result.reconciliationId;
+    if (!groups.has(transactionId)) groups.set(transactionId, []);
+    groups.get(transactionId).push(result);
+  });
+
+  return [...groups.entries()].map(([transactionId, transactionResults]) => {
+    const orderedResults = [...transactionResults].sort(
+      (left, right) => resultTimestamp(right) - resultTimestamp(left),
+    );
+    const primary = orderedResults.find((result) => !isDuplicateResult(result)) || orderedResults[0];
+
+    return {
+      transactionId,
+      primary,
+      auditEvents: orderedResults.filter((result) => result !== primary),
+      latestEvaluatedAt: orderedResults[0].evaluatedAt,
+      hasReview: orderedResults.some((result) => result.status !== "MATCHED"),
+    };
+  }).sort((left, right) => resultTimestamp(null, right.latestEvaluatedAt)
+    - resultTimestamp(null, left.latestEvaluatedAt));
+}
+
+function isDuplicateResult(result) {
+  return duplicateStatuses.has(result.status);
+}
+
+function auditLabel(result) {
+  if (result.status === "DUPLICATE_PAYMENT") return "Duplicate payment ignored";
+  if (result.status === "DUPLICATE_LEDGER_ENTRY") return "Duplicate ledger entry ignored";
+  return result.status.replaceAll("_", " ");
+}
+
+function resultTimestamp(result, fallback) {
+  return new Date(result?.evaluatedAt || fallback || 0).getTime();
 }
 
 function setControlsDisabled(disabled, activeRun) {

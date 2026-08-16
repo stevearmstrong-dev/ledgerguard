@@ -20,7 +20,9 @@ class DashboardAssetsTest {
                 .contains("Transaction workbench")
                 .contains("Follow the transaction")
                 .contains("LIVE PROCESSING TRACE")
-                .contains("Recent reconciliations")
+                .contains("Recent transaction activity")
+                .contains("Transactions")
+                .contains("Flagged")
                 .contains("/app.js")
                 .contains("/styles.css");
         assertThat(javascript)
@@ -29,6 +31,8 @@ class DashboardAssetsTest {
                 .contains("/api/reconciliations")
                 .contains("waitForResult")
                 .contains("setTraceStep")
+                .contains("groupResultsByTransaction")
+                .contains("Duplicate payment ignored")
                 .contains("MISSING_LEDGER_ENTRY")
                 .contains("visibilitychange");
     }
