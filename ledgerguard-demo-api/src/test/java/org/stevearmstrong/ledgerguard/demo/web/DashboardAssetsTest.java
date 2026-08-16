@@ -18,6 +18,7 @@ class DashboardAssetsTest {
 
         assertThat(html)
                 .contains("LedgerGuard · Reconciliation Console")
+                .contains("by Steve Armstrong")
                 .contains("Transaction workbench")
                 .contains("Follow the transaction")
                 .contains("LIVE PROCESSING TRACE")
@@ -25,7 +26,7 @@ class DashboardAssetsTest {
                 .contains("Transactions")
                 .contains("Flagged")
                 .contains("/app.js?v=2")
-                .contains("/styles.css?v=2");
+                .contains("/styles.css?v=3");
         assertThat(javascript)
                 .contains("/api/scenarios/")
                 .contains("/api/transactions")
