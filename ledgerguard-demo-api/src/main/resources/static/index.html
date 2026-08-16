@@ -299,7 +299,7 @@
         <div class="panel-heading panel-heading-history">
           <div>
             <p class="section-index">04 / AUDIT STREAM</p>
-            <h2 id="history-title">Recent reconciliations.</h2>
+            <h2 id="history-title">Recent transaction activity.</h2>
           </div>
           <div class="history-actions">
             <label>
@@ -307,7 +307,7 @@
               <select id="result-filter">
                 <option value="all">All outcomes</option>
                 <option value="matched">Matched only</option>
-                <option value="review">Needs review</option>
+                <option value="review">Flagged activity</option>
               </select>
             </label>
             <button class="clear-button" id="clear-results" type="button">Clear local view</button>
@@ -315,9 +315,9 @@
         </div>
 
         <div class="metric-grid" aria-label="Reconciliation metrics">
-          <div><span>Total</span><strong id="metric-total">0</strong></div>
+          <div><span>Transactions</span><strong id="metric-total">0</strong></div>
           <div><span>Matched</span><strong id="metric-matched">0</strong></div>
-          <div><span>Review</span><strong id="metric-review">0</strong></div>
+          <div><span>Flagged</span><strong id="metric-review">0</strong></div>
           <div><span>Match rate</span><strong id="metric-rate">—</strong></div>
         </div>
 
