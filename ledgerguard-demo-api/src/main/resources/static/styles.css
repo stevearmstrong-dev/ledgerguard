@@ -94,8 +94,15 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 
 .brand > span:last-child { display: flex; flex-direction: column; gap: 0.18rem; }
 .brand strong { font-size: 0.92rem; letter-spacing: -0.02em; }
-.brand small { color: var(--muted); font-family: var(--mono); font-size: 0.6rem; text-transform: uppercase; }
-.brand .brand-byline { letter-spacing: 0.01em; text-transform: none; }
+.brand .brand-byline {
+  color: var(--muted);
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: 0.72rem;
+  font-style: italic;
+  font-weight: 400;
+  letter-spacing: -0.02em;
+  line-height: 1;
+}
 
 .system-status { align-items: center; display: flex; gap: 0.55rem; }
 
