@@ -95,6 +95,7 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 .brand > span:last-child { display: flex; flex-direction: column; gap: 0.18rem; }
 .brand strong { font-size: 0.92rem; letter-spacing: -0.02em; }
 .brand small { color: var(--muted); font-family: var(--mono); font-size: 0.6rem; text-transform: uppercase; }
+.brand .brand-byline { letter-spacing: 0.01em; text-transform: none; }
 
 .system-status { align-items: center; display: flex; gap: 0.55rem; }
 
@@ -402,7 +403,7 @@ footer { color: var(--muted); display: flex; font-family: var(--mono); font-size
 
 @media (max-width: 760px) {
   .app-header { height: 68px; padding: 0 1rem; }
-  .brand small, .status-pill-muted { display: none; }
+  .status-pill-muted { display: none; }
   .system-status > a { padding: 0.64rem; }
   .hero-grid { display: block; min-height: auto; padding: 5rem 1rem 3.5rem; }
   h1 { font-size: clamp(3.5rem, 18vw, 6rem); }
