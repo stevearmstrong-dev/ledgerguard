@@ -1,0 +1,205 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="Interactive LedgerGuard Kafka Streams reconciliation dashboard">
+  <meta name="theme-color" content="#07110d">
+  <title>LedgerGuard · Reconciliation Console</title>
+  <link rel="stylesheet" href="/styles.css">
+  <script src="/app.js" defer></script>
+</head>
+<body>
+  <a class="skip-link" href="#main-content">Skip to dashboard</a>
+
+  <header class="app-header">
+    <a class="brand" href="/" aria-label="LedgerGuard dashboard home">
+      <span class="brand-mark" aria-hidden="true">LG</span>
+      <span>
+        <strong>LedgerGuard</strong>
+        <small>Reconciliation console</small>
+      </span>
+    </a>
+
+    <div class="system-status" aria-label="System status">
+      <span class="status-pill" id="api-status"><i aria-hidden="true"></i> Connecting API</span>
+      <span class="status-pill status-pill-muted"><i aria-hidden="true"></i> Exactly-once v2</span>
+      <a href="https://github.com/stevearmstrong-dev/ledgerguard" target="_blank" rel="noreferrer">
+        Source <span aria-hidden="true">↗</span>
+      </a>
+    </div>
+  </header>
+
+  <main id="main-content">
+    <section class="hero-grid" aria-labelledby="page-title">
+      <div class="hero-copy">
+        <p class="eyebrow"><span>LIVE DEMO</span> JAVA 21 · SPRING BOOT · KAFKA STREAMS</p>
+        <h1 id="page-title">Reconcile the<br><em>event stream.</em></h1>
+        <p class="hero-summary">
+          Publish synthetic payment and ledger events, watch them move through Kafka, and inspect the auditable result produced by the stateful reconciliation engine.
+        </p>
+      </div>
+
+      <aside class="run-context" aria-label="Current demo context">
+        <p class="mono-label">CURRENT RUN</p>
+        <strong id="current-transaction">No scenario submitted</strong>
+        <span id="current-run-state">Choose a scenario to begin.</span>
+        <div class="run-clock">
+          <span>EVENT TIME</span>
+          <time id="event-clock">--:--:-- UTC</time>
+        </div>
+      </aside>
+    </section>
+
+    <section class="dashboard-shell">
+      <section class="scenario-panel" aria-labelledby="scenario-title">
+        <div class="panel-heading">
+          <div>
+            <p class="section-index">01 / PRODUCE EVENTS</p>
+            <h2 id="scenario-title">Choose a failure mode.</h2>
+          </div>
+          <p>Each control publishes a real event pattern to the local Kafka broker.</p>
+        </div>
+        <div class="scenario-grid" id="scenario-grid" aria-live="polite">
+          <p class="loading-copy">Loading scenarios…</p>
+        </div>
+      </section>
+
+      <section class="pipeline-panel" aria-labelledby="pipeline-title">
+        <div class="panel-heading panel-heading-compact">
+          <div>
+            <p class="section-index">02 / STREAM TOPOLOGY</p>
+            <h2 id="pipeline-title">Follow the transaction.</h2>
+          </div>
+          <div class="pipeline-legend" aria-label="Pipeline legend">
+            <span><i class="legend-dot legend-active" aria-hidden="true"></i> Active</span>
+            <span><i class="legend-dot legend-review" aria-hidden="true"></i> Review</span>
+          </div>
+        </div>
+
+        <div class="event-pipeline" id="event-pipeline">
+          <article class="pipeline-node" data-stage="produce">
+            <span class="node-index">01</span>
+            <p>PRODUCERS</p>
+            <h3>Payment + ledger events</h3>
+            <small>Idempotent JSON publishing</small>
+          </article>
+          <span class="pipeline-arrow" aria-hidden="true">→</span>
+          <article class="pipeline-node pipeline-node-kafka" data-stage="broker">
+            <span class="node-index">02</span>
+            <p>BROKER</p>
+            <h3>Apache Kafka</h3>
+            <small>Partitioned by transaction</small>
+          </article>
+          <span class="pipeline-arrow" aria-hidden="true">→</span>
+          <article class="pipeline-node" data-stage="reconcile">
+            <span class="node-index">03</span>
+            <p>STREAM ENGINE</p>
+            <h3>Join + deduplicate</h3>
+            <small>10s window · 3s grace</small>
+          </article>
+          <span class="pipeline-arrow" aria-hidden="true">→</span>
+          <article class="pipeline-node" data-stage="outcome">
+            <span class="node-index">04</span>
+            <p>OUTCOME</p>
+            <h3>Audit + exception topics</h3>
+            <small>Queryable result projection</small>
+          </article>
+        </div>
+
+        <div class="event-ledger" id="event-ledger" aria-live="polite">
+          <span>WAITING</span>
+          <p>The topology is ready for a scenario.</p>
+        </div>
+      </section>
+
+      <section class="outcome-panel" aria-labelledby="outcome-title">
+        <div class="panel-heading panel-heading-compact">
+          <div>
+            <p class="section-index">03 / RECONCILIATION</p>
+            <h2 id="outcome-title">Latest outcome.</h2>
+          </div>
+          <span class="outcome-badge badge-neutral" id="outcome-badge">NO RESULT</span>
+        </div>
+
+        <div class="outcome-empty" id="outcome-empty">
+          <strong>—</strong>
+          <p>A reconciliation result will appear here after both sides of the event window are evaluated.</p>
+        </div>
+
+        <div class="outcome-detail" id="outcome-detail" hidden>
+          <div class="outcome-primary">
+            <p class="mono-label">TRANSACTION</p>
+            <h3 id="outcome-transaction">—</h3>
+            <p id="outcome-reason">—</p>
+          </div>
+          <dl class="amount-comparison">
+            <div>
+              <dt>Payment</dt>
+              <dd id="payment-amount">—</dd>
+              <small id="payment-event">No event</small>
+            </div>
+            <div>
+              <dt>Ledger</dt>
+              <dd id="ledger-amount">—</dd>
+              <small id="ledger-event">No event</small>
+            </div>
+          </dl>
+        </div>
+      </section>
+
+      <section class="history-panel" aria-labelledby="history-title">
+        <div class="panel-heading panel-heading-history">
+          <div>
+            <p class="section-index">04 / AUDIT STREAM</p>
+            <h2 id="history-title">Recent reconciliations.</h2>
+          </div>
+          <div class="history-actions">
+            <label>
+              <span class="visually-hidden">Filter outcomes</span>
+              <select id="result-filter">
+                <option value="all">All outcomes</option>
+                <option value="matched">Matched only</option>
+                <option value="review">Needs review</option>
+              </select>
+            </label>
+            <button class="clear-button" id="clear-results" type="button">Clear local view</button>
+          </div>
+        </div>
+
+        <div class="metric-grid" aria-label="Reconciliation metrics">
+          <div><span>Total</span><strong id="metric-total">0</strong></div>
+          <div><span>Matched</span><strong id="metric-matched">0</strong></div>
+          <div><span>Review</span><strong id="metric-review">0</strong></div>
+          <div><span>Match rate</span><strong id="metric-rate">—</strong></div>
+        </div>
+
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Evaluated</th>
+                <th>Transaction</th>
+                <th>Outcome</th>
+                <th>Payment</th>
+                <th>Ledger</th>
+                <th>Reason</th>
+              </tr>
+            </thead>
+            <tbody id="result-table">
+              <tr class="empty-row"><td colspan="6">No reconciliation events yet.</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+    </section>
+  </main>
+
+  <div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
+
+  <footer>
+    <span>LedgerGuard · Synthetic financial events only</span>
+    <span>Java 21 / Kafka Streams / Exactly-once v2</span>
+  </footer>
+</body>
+</html>

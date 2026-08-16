@@ -16,20 +16,23 @@ The project uses synthetic data and rules. It contains no employer code, proprie
 - Bounded, persistent event-ID deduplication
 - Explicit exception routing
 - Idempotent Kafka production
+- Same-origin operations dashboard backed by the live event stream
 - Metrics with Spring Boot Actuator, Micrometer, and Prometheus
-- Topology, domain, simulator, and real-broker tests
+- Topology, domain, simulator, dashboard, and real-broker tests
 
 ## Architecture
 
 ```mermaid
 flowchart LR
-    A["Demo API / scenario generator"] -->|"payments.v1"| B["Apache Kafka"]
+    G["Browser reconciliation console"] -->|"POST scenario"| A["Demo API / scenario generator"]
+    A -->|"payments.v1"| B["Apache Kafka"]
     A -->|"ledger-entries.v1"| B
     B --> C["Kafka Streams reconciliation engine"]
     C -->|"reconciliations.v1"| B
     C -->|"reconciliation-exceptions.v1"| B
     B --> D["In-memory demo result projection"]
-    D --> E["GET /api/reconciliations"]
+    D --> E["Reconciliation REST API"]
+    E --> G
     C --> F["Actuator / Prometheus metrics"]
 ```
 
@@ -39,7 +42,7 @@ The system is intentionally split into three focused modules:
 | --- | --- |
 | `ledgerguard-contracts` | Immutable payment, ledger, and reconciliation event contracts |
 | `ledgerguard-reconciliation` | Deduplication, event-time joins, classification, routing, and metrics |
-| `ledgerguard-demo-api` | Scenario generation and a queryable projection of recent outcomes |
+| `ledgerguard-demo-api` | Interactive dashboard, scenario generation, and a queryable projection of recent outcomes |
 
 ## Reconciliation outcomes
 
@@ -79,7 +82,9 @@ In another terminal, start the demo API:
 java -jar ledgerguard-demo-api/target/ledgerguard-demo-api-0.1.0-SNAPSHOT.jar
 ```
 
-Run a scenario and inspect the result:
+Open [http://localhost:8080](http://localhost:8080) to use the interactive reconciliation console. It runs every scenario against the local Kafka broker, visualizes the processing stages, and updates the result history from the live projection.
+
+The REST API remains available for command-line use:
 
 ```bash
 curl -X POST http://localhost:8080/api/scenarios/amount-mismatch
@@ -117,6 +122,7 @@ Duplicate IDs are retained in persistent window stores for 24 hours. This bounds
 - Domain tests exercise every reconciliation classification.
 - `TopologyTestDriver` tests the real Kafka Streams topology without mocks.
 - Simulator tests verify the exact event patterns produced by demo scenarios.
+- Dashboard asset tests protect the browser console's critical controls and API integration points.
 - A Spring context test verifies production constructor wiring.
 - A Testcontainers smoke test validates compatibility with the official Apache Kafka image when Docker is available.
 
@@ -129,7 +135,6 @@ Run all checks with:
 ## Roadmap
 
 - PostgreSQL-backed query projection and audit history
-- Live operations dashboard
 - OpenTelemetry traces across publishing and reconciliation
 - Schema evolution and compatibility checks
 - Controlled replay from historical offsets

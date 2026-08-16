@@ -29,4 +29,8 @@ public class ReconciliationResultStore {
                 .sorted(Comparator.comparing(ReconciliationResult::evaluatedAt).reversed())
                 .toList();
     }
+
+    public void clear() {
+        results.clear();
+    }
 }

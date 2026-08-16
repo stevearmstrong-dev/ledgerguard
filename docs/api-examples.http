@@ -16,6 +16,9 @@ POST http://localhost:8080/api/scenarios/duplicate-payment
 ### List recent reconciliation outcomes
 GET http://localhost:8080/api/reconciliations
 
+### Clear the demo result projection
+DELETE http://localhost:8080/api/reconciliations
+
 ### Engine metrics
 GET http://localhost:8081/actuator/metrics/ledgerguard.reconciliations
 
